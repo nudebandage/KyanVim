@@ -1,0 +1,5 @@
+tags
+__pycache__/
+.cache/
+*.egg-info/
+.guten_tags
