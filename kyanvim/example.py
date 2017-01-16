@@ -5,25 +5,37 @@ from kivy.clock import Clock
 
 from kyanvim import KyanVimEditor
 
+from kyanvim.ui_bridge import UIBridge
+from kyanvim.util import attach_headless
+
 class RootWidget(BoxLayout):
     pass
 
 class MyEditor(KyanVimEditor):
     pass
 
-class ExampleApp(App):
+class Test():
+    pass
 
-    # def start(self):
-        # import pdb;pdb.set_trace()
-        # Starts the Kivy and the 
+class ExampleApp(App):
+    pass
 
     def build(self):
         root = RootWidget()
-        # root.kv_1.nvim_connect()
-        Clock.schedule_once(lambda x:root.kv_1.nvim_connect(), 2)
-        return root
+
+        # b = UIBridge()
+        # test = Test()
+        # nvim = attach_headless(('-u', 'NONE'), address)
+        # b.connect(nvim, test)
+        self.kv = root.kv_1
+        root.kv_1.nvim_connect(headless=True)
+        # Clock.schedule_once(lambda x, root=root:root.kv_1.nvim_connect(), 2)
+        # return root
         # self.root = Builder.load_file('example.kv')
-        # return self.root
+        return root
+
+    def run(self):
+        super().run()
 
 
 if __name__ == '__main__':
@@ -35,6 +47,8 @@ if __name__ == '__main__':
         address = None
 
     app = ExampleApp()
+    # import pdb;pdb.set_trace()
+    # app.kv.nvim_connect()
     # while 1:
         # time.sleep(0.1)
         # pass

@@ -173,11 +173,11 @@ class NvimHandler(MixTk):
         # self.canvas.config(font=self._fnormal)
         # self._colsize = self._fnormal.measure('M')
         # self._rowsize = self._fnormal.metrics('linespace')
-        self._colsize = 13
-        self._rowsize = 13
+        self._colsize = 15
+        self._rowsize = 15
 
     @debug_echo
-    def connect(self, *nvim_args, address=None, headless=False, exec_name='nvim'):
+    def connect(self, *nvim_args, address=None, headless=True, exec_name='nvim'):
         # Value has been set, otherwise default to this functions default value
         if self.address != -1 and not address:
             address = self.address
@@ -206,31 +206,31 @@ class NvimHandler(MixTk):
         # only can support mono font i think..
         # self._screen = Screen(cols, rows)
         self._screen.resize(cols, rows)
-        top, bot, left, right = 0, rows-1, 0, cols-1
+        top, left, bot, right = 0, 0, rows-1, cols-1
         self.widget._destroy_cells(top, bot, left, right)
-        self.widget._create_cells(top, bot, left, right,
-                                  self._rowsize, self.colsize)
+        self.widget._create_cells(top, left, bot, right,
+                                  self._rowsize, self._colsize)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_clear(self):
         '''
         wipe everyything, even the ~ and status bar
         '''
         self._screen.clear()
 
-    @debug_echo
+    # @debug_echo
     def _nvim_eol_clear(self):
         '''
         clear from cursor position to the end of the line
         '''
         self._screen.eol_clear()
 
-    @debug_echo
+    # @debug_echo
     def _nvim_cursor_goto(self, row, col):
         '''Move gui cursor to position'''
         self._screen.cursor_goto(row, col)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_busy_start(self):
         self._busy = True
 
@@ -243,23 +243,23 @@ class NvimHandler(MixTk):
     def _nvim_mouse_off(self):
         self.mouse_enabled = False
 
-    @debug_echo
+    # @debug_echo
     def _nvim_mode_change(self, mode):
         self._insert_cursor = mode == 'insert'
 
-    @debug_echo
+    # @debug_echo
     def _nvim_set_scroll_region(self, top, bot, left, right):
         self._screen.set_scroll_region(top, bot, left, right)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_scroll(self, count):
         self._screen.scroll(count)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_highlight_set(self, attrs):
         self._screen.attrs.set_next(attrs)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_put(self, text):
         '''
         put a charachter into position, we only write the lines
@@ -273,15 +273,15 @@ class NvimHandler(MixTk):
     def _nvim_visual_bell(self):
         pass
 
-    @debug_echo
+    # @debug_echo
     def _nvim_update_fg(self, fg):
         self._screen.attrs.set_default('foreground', fg)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_update_bg(self, bg):
         self._screen.attrs.set_default('background', bg)
 
-    @debug_echo
+    # @debug_echo
     def _nvim_update_sp(self, sp):
         self._screen.attrs.set_default('special', sp)
 
@@ -295,10 +295,11 @@ class NvimHandler(MixTk):
 
     # @debug_echo
     def _nvim_set_icon(self, icon):
-        self._icon = tk.PhotoImage(file=icon)
-        self.root.tk.call('wm', 'iconphoto', self.root._w, self._icon)
+        pass
+        # self._icon = tk.PhotoImage(file=icon)
+        # self.root.tk.call('wm', 'iconphoto', self.root._w, self._icon)
 
-    @debug_echo
+    # @debug_echo
     def _flush(self):
         if self._screen._dirty.is_dirty():
             top, left, bot, right = self._screen._dirty.get()
@@ -317,40 +318,11 @@ class NvimHandler(MixTk):
         updates a line :) from row,col to eol using attrs
         '''
         end = col + len(data)
-        # print('_draw', row, col, repr(data))
-
-        font = self._fnormal
+        # font = self._fnormal
         fg = attrs[0]['foreground']
         bg = attrs[0]['background']
-
-        # get the "text" and "rect" which correspond to the current cell
         for i, c in enumerate(range(col, end)):
-            # x, y = self._tk_get_coords(row, c)
-            # items = self.canvas.find_overlapping(x, y, x + 1, y + 1)
-            # if len(items) != 2:
-                # caught part the double-width character in the cell to the left,
-                # filter items which dont have the same horizontal coordinate as
-                # "x"
-                # predicate = lambda item: self.canvas.coords(item)[0] == x
-                # items = list(filter(predicate, items))
-                # if len(items) != 2:
-                    # items = items[-2:]
-
-            # rect has lower id than text, sort to unpack correctly
-            # rect, text = sorted(items)
-            rect, text = ITEMS.get((row, c))
-            # print(rect = _rect)
-            # if rect != _rect:
-                # print('No match on rect')
-            # else:
-                # print('match on rect')
-                # import pdb;pdb.set_trace()
-            # assert _rect == rect
-            # assert text == text
-
-            print(text.__dict__)
-            # self.canvas.itemconfig(text, fill=fg, font=font, text=data[i])
-            # self.canvas.itemconfig(rect, fill=bg)
+            self.widget._update_cell(row, c, data[i], 13, fg, bg)
 
 
     @debug_echo
@@ -420,7 +392,7 @@ class KyanVimEditor(kv_util.KvCanvas):
     def schedule_screen_update(self, apply_updates):
         '''This function is called from the bridge,
            apply_updates calls the required nvim actions'''
-        def do():
+        def do(x):
             if self.nvim_handler.debug_echo:
                 print()
                 print('Begin')
@@ -435,7 +407,7 @@ class KyanVimEditor(kv_util.KvCanvas):
 
     def quit(self):
         print('do quit..')
-        Clock.schedule_once(self.app.quit, 1)
+        # Clock.schedule_once(self.app.quit, 1)
         # self.root.after_idle(self.root.quit)
 
 if __name__ == '__main__':

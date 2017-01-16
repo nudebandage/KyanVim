@@ -4,7 +4,9 @@ from kivy.core.text import Label as CoreLabel
 from kivy.uix.widget import Widget as BaseWidget
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 
+from random import random as r
 
 class CellCache():
     ''' Updating cells is cheaper than recreating them'''
@@ -13,6 +15,9 @@ class CellCache():
 
     def set(self, row, col, rect):
         self.cache[(row, col)] = rect
+
+    def get(self, row, col):
+        return self.cache.get((row, col))
 
     def reset(self):
         self.cache = {}
@@ -24,10 +29,13 @@ class Cell():
         self.rect = rect
 
 
+# label = Label(text='0')
+
 class _Canvas(BaseCanvas):
     def create_cell(self, row, col, width, height):
+        # label.text = str(int(label.text) + 1)
         with self:
-            colour = Color()
+            colour = Color(r(), 1, 1, mode='hsv')
             rect = Rectangle(pos=(row*width, col*height),
                              size=(width, height))
         return Cell(colour, rect)
@@ -37,7 +45,7 @@ class _Canvas(BaseCanvas):
         label.refresh()
         text = label.texture
         cell.color = (bg, 1, 1)
-        # cell.rect.size = text.size
+        cell.rect.size = text.size
         cell.rect.texture = text
 
 
@@ -45,6 +53,7 @@ class _Widget(BaseWidget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.canvas = _Canvas()
+        # self.add_widget(label)
 
 
 class KvCanvas(FocusBehavior, _Widget):
@@ -57,19 +66,22 @@ class KvCanvas(FocusBehavior, _Widget):
 
     # TODO, CURRENTLY ONLY WORKS IF WE DESTROY ALL
     def _destroy_cells(self, top, left, bot, right):
+        # print('DESTROY CELLS')
         self._cell_cache.reset()
-        self.canvas.reset()
+        self.canvas.clear()
 
     def _create_cells(self, top, left, bot, right, width, height):
         '''add cells'''
-        for row in range(top-1, bot):
-            for col in range(left, right):
+        # print('CREATE CELLS', top, left, bot, right)
+        for row in range(top, bot + 1):
+            for col in range(left, right + 1):
                 cell = self.canvas.create_cell(row, col, width, height)
                 self._cell_cache.set(row, col, cell)
 
     def _update_cell(self, row, col, data, font_size, fg, bg):
+        # print('UPDATE CELLS')
         cell = self._cell_cache.get(row, col)
-        self.canvas.update_cell_text(cell, data, font_size, fg, bg)
+        # self.canvas.update_cell_text(cell, data, font_size, fg, bg)
 
 
 if __name__ == '__main__':

@@ -116,7 +116,7 @@ def debug_echo(func):
                 to_print = []
             else:
                 to_print = args[1:]
-            print(func.__name__, repr(to_print), **kwargs)
+            print(func.__name__, repr(to_print), kwargs)
 
         return func(*args, **kwargs)
     return deco

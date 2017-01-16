@@ -56,6 +56,7 @@ class UIBridge(object):
 
     def _ui_event_loop(self):
         self._sem.acquire()
+        print('acquire sem')
         # if self._profile:
             # import StringIO
             # import cProfile
@@ -78,9 +79,7 @@ class UIBridge(object):
             raise Exception('Not implemented')
 
         def on_notification(method, updates):
-            print('ON NOTIF')
             def apply_updates():
-                print('APPLY')
                 if self._notify:
                     sys.stdout.write('attached\n')
                     sys.stdout.flush()
@@ -91,7 +90,7 @@ class UIBridge(object):
                         # l = [','.join([str(a) for a in args])
                         #      for args in update[1:]]
                         # print >> sys.stderr, update[0], ' '.join(l)
-                        logging.info(update)
+                        # logging.info(update)
                         try:
                             nvim_handler = getattr(self._ui, 'nvim_handler')
                             handler = getattr(nvim_handler, '_nvim_' + update[0])
@@ -108,6 +107,5 @@ class UIBridge(object):
             if method == 'redraw' and updates:
                 self._ui.schedule_screen_update(apply_updates)
 
-        print('entering loop')
         self._nvim.run_loop(on_request, on_notification, on_setup)
         self._ui.quit()
