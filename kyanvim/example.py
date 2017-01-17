@@ -2,11 +2,16 @@ from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.lang import Builder
 from kivy.clock import Clock
+from kivy.config import Config
 
 from kyanvim import KyanVimEditor
 
 from kyanvim.ui_bridge import UIBridge
 from kyanvim.util import attach_headless
+
+Config.set('kivy', 'exit_on_escape', '0')
+# Config.set('kivy', 'desktop', '1')
+# Config.set('kivy', 'keyboard', 'system')
 
 class RootWidget(BoxLayout):
     pass

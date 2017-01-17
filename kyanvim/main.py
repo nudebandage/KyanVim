@@ -8,21 +8,21 @@ Implements a UI for neovim  using tkinter.
 '''
 import os
 import sys
-import math
 import time
+import math
 
 from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.uix.textinput import TextInput
 from kivy.lang import Builder
 from kivy.clock import Clock
-# from kivy.base import KivyEventLoop
+from kivy.core.window import WindowBase
 
 from kyanvim.util import attach_headless, attach_child
 from kyanvim.ui_bridge import UIBridge
 from kyanvim.screen import Screen
 from kyanvim import kv_util
-from kyanvim.util import debug_echo
+from kyanvim.util import debug_echo, _stringify_key
 
 RESIZE_DELAY = 0.04
 
@@ -35,44 +35,45 @@ def parse_tk_state(state):
         return 'Shift'
 
 
-tk_modifiers = ('lctrl', 'rctrl',
-                'alt', 'Control_R',
-                'shift', 'Shift_R',
-                'Win_L', 'Win_R')
+KV_MODS = ('lctrl', 'rctrl',
+           'alt', 'alt-gr',
+           'shift', 'rshift',
+           'super')
 
 
 KEY_TABLE = {
-    'slash': '/',
-    'backslash': '\\',
-    'asciicircumf': '^',
-    'at': '@',
-    'numbersign': '#',
-    'dollar': '$',
-    'percent': '%',
-    'ampersand': '&',
-    'asterisk': '*',
-    'parenleft': '(',
-    'parenright': ')',
-    'underscore': '_',
-    'plus': '+',
-    'minus': '-',
-    'bracketleft': '[',
-    'bracketright': ']',
-    'braceleft': '{',
-    'braceright': '}',
-    'quotedbl': '"',
-    'apostrophe': "'",
-    'less': "<",
-    'greater': ">",
-    'comma': ",",
-    'period': ".",
-    'BackSpace': 'BS',
-    'Return': 'CR',
-    'Escape': 'Esc',
-    'Delete': 'Del',
-    'Next': 'PageUp',
-    'Prior': 'PageDown',
-    'Enter': 'CR',
+    'escape': 'Esc',
+    # 'tab': 'Tab' # TODO
+    # 'slash': '/',
+    # 'backslash': '\\',
+    # 'asciicircumf': '^',
+    # 'at': '@',
+    # 'numbersign': '#',
+    # 'dollar': '$',
+    # 'percent': '%',
+    # 'ampersand': '&',
+    # 'asterisk': '*',
+    # 'parenleft': '(',
+    # 'parenright': ')',
+    # 'underscore': '_',
+    # 'plus': '+',
+    # 'minus': '-',
+    # 'bracketleft': '[',
+    # 'bracketright': ']',
+    # 'braceleft': '{',
+    # 'braceright': '}',
+    # 'quotedbl': '"',
+    # 'apostrophe': "'",
+    # 'less': "<",
+    # 'greater': ">",
+    # 'comma': ",",
+    # 'period': ".",
+    # 'BackSpace': 'BS',
+    # 'Return': 'CR',
+    # 'Delete': 'Del',
+    # 'Next': 'PageUp',
+    # 'Prior': 'PageDown',
+    # 'Enter': 'CR',
 }
 
 ITEMS = {}
@@ -81,42 +82,44 @@ class MixTk():
     '''
     Tkinter actions we bind and use to communicate to neovim
     '''
-    def _kv_key_pressed(self, window, keycode, text, modifiers):
-        # print('kv key pressed', window)
-        # print(keycode, repr(text), modifiers)
-        # return
+    @staticmethod
+    def is_uppercaseable(char):
+        if char == char.upper():
+            return False
+        return True
 
-        print(text, modifiers)
-        if text != '' and modifiers == ['shift']:
-            self._bridge.input(text.upper())
-        # elif text and not modifiers:
-            # if t
+    def _kv_key_pressed(self, kb, keycode, text, modifiers):
+        assert text != ''
+        assert len(modifiers) < 2
 
-        # print(keycode, ord(text))
-        # if keycode == ord(text):
-            # self._bridge.input(event.char)
-            return
-        print('fail')
-        return
-
-
-
-        # state = parse_tk_state(event.state)
-        if text != ' ' and modifiers in ([], ['Shift']):
-            if event.keysym_num == ord(event.char):
-                # Send through normal keys
-                self._bridge.input(event.char)
-                return
-        if keysym in tk_modifiers:
-            # We don't need to track the state of modifier bits
-            return
-        if keysym.startswith('KP_'):
-            keysym = keysym[3:]
-
-        # Translated so vim understands
-        input_str = _stringify_key( KEY_TABLE.get(keysym, keysym), state)
+        print(text, chr(keycode[0]), keycode[0], keycode[1], modifiers)
+        # Single or multi key mod pressed (without a key)
+        if keycode[1] in KV_MODS:
+            # print('MOD PRESESD GTFO')
+            return True
+        elif modifiers == ['shift']:
+            if self.is_uppercaseable(text):
+                # print('SENDING UPPER CASE', text.upper())
+                self._bridge.input(text.upper())
+                return True
+        elif text != None and not modifiers:
+            # Normal key
+            # print('SEND NORMAL KEY', text)
+            self._bridge.input(text)
+            return True
+        # print('TRANSLATE FOR VIM..')
+        # Translate special key so vim understands (with or without mods)
+        try:
+            state = modifiers[0]
+        except IndexError:
+            state = None
+        input_str = _stringify_key(KEY_TABLE.get(keycode[1], keycode[1]), state)
         self._bridge.input(input_str)
-
+        # If an escape was pressed we must refocus ourselves fml kivy
+        #TODO failing
+        if keycode[0] == 27:
+            self.widget.focus = True
+        return True
 
     def _tk_quit(self, *args):
         self._bridge.exit()
@@ -429,9 +432,6 @@ class KyanVimEditor(kv_util.KvCanvas):
         # self.root.after_idle(self.root.quit)
 
 if __name__ == '__main__':
-    # pass
     from kyanvim.example import ExampleApp
     app = ExampleApp()
-    # app.start()
     app.run()
-    print('Dead')
