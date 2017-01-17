@@ -36,7 +36,7 @@ class _Canvas(BaseCanvas):
         # label.text = str(int(label.text) + 1)
         with self:
             colour = Color(r(), 1, 1, mode='hsv')
-            rect = Rectangle(pos=(row*width, col*height),
+            rect = Rectangle(pos=(col*width, row*height),
                              size=(width, height))
         return Cell(colour, rect)
 
@@ -44,7 +44,7 @@ class _Canvas(BaseCanvas):
         label = CoreLabel(text=data, font_size=font_size)
         label.refresh()
         text = label.texture
-        cell.color = (bg, 1, 1)
+        # cell.color = (bg, 1, 1)
         cell.rect.size = text.size
         cell.rect.texture = text
 
@@ -71,27 +71,29 @@ class KvCanvas(FocusBehavior, _Widget):
         self.canvas.clear()
 
     def _create_cells(self, top, left, bot, right, width, height):
-        '''add cells'''
-        # print('CREATE CELLS', top, left, bot, right)
-        for row in range(top, bot + 1):
+        '''add cells, kivy 0,0 is bottom left'''
+        print('CREATE CELLS', top, left, bot, right)
+        for _row in range(top, bot + 1):
             for col in range(left, right + 1):
+                # kivy 0 is at bottom of screen, invert it with bot-row
+
+                # row = _row
+                # print(row)
+                row = bot - _row
                 cell = self.canvas.create_cell(row, col, width, height)
                 self._cell_cache.set(row, col, cell)
 
-    def _update_cell(self, row, col, data, font_size, fg, bg):
-        # print('UPDATE CELLS')
+    def _update_cell(self, _row, col, data, font_size, fg, bg, bot):
+        # print('UPDATE CELLS', row, col, data)
+        row = bot - _row
         cell = self._cell_cache.get(row, col)
-        # self.canvas.update_cell_text(cell, data, font_size, fg, bg)
+        self.canvas.update_cell_text(cell, data, font_size, fg, bg)
 
 
 if __name__ == '__main__':
-    from kivy.app import App
-    class ExampleAppKvCanvas(KvCanvas): pass
-
-    class blahblah(App):
-        def build(self):
-            return ExampleAppKvCanvas()
-    app = blahblah()
+    # from kivy.app import App
+    from example import ExampleApp
+    app = ExampleApp()
     app.run()
 
 

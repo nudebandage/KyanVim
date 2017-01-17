@@ -35,9 +35,9 @@ def parse_tk_state(state):
         return 'Shift'
 
 
-tk_modifiers = ('Alt_L', 'Alt_R',
-                'Control_L', 'Control_R',
-                'Shift_L', 'Shift_R',
+tk_modifiers = ('lctrl', 'rctrl',
+                'alt', 'Control_R',
+                'shift', 'Shift_R',
                 'Win_L', 'Win_R')
 
 
@@ -81,11 +81,28 @@ class MixTk():
     '''
     Tkinter actions we bind and use to communicate to neovim
     '''
-    def tk_key_pressed(self,event, **k):
-        keysym = event.keysym
-        state = parse_tk_state(event.state)
-        if event.char not in ('', ' ') \
-                    and state in (None, 'Shift'):
+    def _kv_key_pressed(self, window, keycode, text, modifiers):
+        # print('kv key pressed', window)
+        # print(keycode, repr(text), modifiers)
+        # return
+
+        print(text, modifiers)
+        if text != '' and modifiers == ['shift']:
+            self._bridge.input(text.upper())
+        # elif text and not modifiers:
+            # if t
+
+        # print(keycode, ord(text))
+        # if keycode == ord(text):
+            # self._bridge.input(event.char)
+            return
+        print('fail')
+        return
+
+
+
+        # state = parse_tk_state(event.state)
+        if text != ' ' and modifiers in ([], ['Shift']):
             if event.keysym_num == ord(event.char):
                 # Send through normal keys
                 self._bridge.input(event.char)
@@ -322,7 +339,7 @@ class NvimHandler(MixTk):
         fg = attrs[0]['foreground']
         bg = attrs[0]['background']
         for i, c in enumerate(range(col, end)):
-            self.widget._update_cell(row, c, data[i], 13, fg, bg)
+            self.widget._update_cell(row, c, data[i], 13, fg, bg, self._screen.bot)
 
 
     @debug_echo
@@ -380,7 +397,8 @@ class KyanVimEditor(kv_util.KvCanvas):
         # bindtags.remove("Canvas")
         # self.bindtags(tuple(bindtags))
 
-        # self.bind('<Key>', self.nvim_handler.tk_key_pressed)
+        self.keyboard_on_key_down = self.nvim_handler._kv_key_pressed
+        # self.bind('<Key>', self.nvim_handler._kv_key_pressed)
 
         # self.bind('<Button-1>', lambda e: self.focus_set())
 
@@ -392,7 +410,7 @@ class KyanVimEditor(kv_util.KvCanvas):
     def schedule_screen_update(self, apply_updates):
         '''This function is called from the bridge,
            apply_updates calls the required nvim actions'''
-        def do(x):
+        def do(_):
             if self.nvim_handler.debug_echo:
                 print()
                 print('Begin')
@@ -402,7 +420,7 @@ class KyanVimEditor(kv_util.KvCanvas):
                 print('End')
                 print()
             # self.nvim_handler._start_blinking()
-        Clock.schedule_once(do, 1)
+        Clock.schedule_once(do, 0)
 
 
     def quit(self):
