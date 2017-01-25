@@ -1,42 +1,43 @@
 from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.lang import Builder
+from kivy.uix.widget import Widget
+from kivy.properties import StringProperty
+from kivy.uix.floatlayout import FloatLayout
 from kivy.clock import Clock
 from kivy.config import Config
 
 from kyanvim import KyanVimEditor
 
-from kyanvim.ui_bridge import UIBridge
-from kyanvim.util import attach_headless
+from kivy.core.window import Window
+Window.clearcolor = (1, 1, 1, 1)
 
 Config.set('kivy', 'exit_on_escape', '0')
 # Config.set('kivy', 'desktop', '1')
 # Config.set('kivy', 'keyboard', 'system')
 
-class RootWidget(BoxLayout):
+class RootWidget(FloatLayout):
     pass
 
 class MyEditor(KyanVimEditor):
     pass
 
-class Test():
-    pass
+class DebugPanel(Widget):
+    fps = StringProperty(None)
+
+    def __init__(self, **kwargs):
+        super(DebugPanel, self).__init__(**kwargs)
+        Clock.schedule_once(self.update_fps)
+
+    def update_fps(self,dt):
+        self.fps = str(int(Clock.get_fps()))
+        Clock.schedule_once(self.update_fps, .05)
 
 class ExampleApp(App):
     pass
 
     def build(self):
         root = RootWidget()
-
-        # b = UIBridge()
-        # test = Test()
-        # nvim = attach_headless(('-u', 'NONE'), address)
-        # b.connect(nvim, test)
         self.kv = root.kv_1
         root.kv_1.nvim_connect(headless=True)
-        # Clock.schedule_once(lambda x, root=root:root.kv_1.nvim_connect(), 2)
-        # return root
-        # self.root = Builder.load_file('example.kv')
         return root
 
     def run(self):
@@ -45,6 +46,8 @@ class ExampleApp(App):
 
 if __name__ == '__main__':
     import sys
+    import cProfile, pstats, io
+    pr = cProfile.Profile()
     try:
         address = sys.argv[1]
     except IndexError:
@@ -52,11 +55,21 @@ if __name__ == '__main__':
         address = None
 
     app = ExampleApp()
-    # import pdb;pdb.set_trace()
     # app.kv.nvim_connect()
-    # while 1:
-        # time.sleep(0.1)
-        # pass
+    import logging
+    def start(arg):
+        logging.info('starintg profil')
+        pr.enable()
+
+    Clock.schedule_once(start, 3)
     app.run()
+    pr.disable()
+    s = io.StringIO()
+    sortby = 'cumulative'
+    # sortby = 'tot'
+    # sortby = 'calls'
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
 
 
