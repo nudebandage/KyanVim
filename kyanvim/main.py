@@ -349,7 +349,7 @@ class KyanVimEditor(kv_util.KvCanvas):
     # So we can shutdown the neovim connections
     instances = []
 
-    def __init__(self, *_, columns=40, rows=16, address=False, toplevel=False, **kwargs):
+    def __init__(self, *_, columns=80, rows=24, address=False, toplevel=False, **kwargs):
         '''
         :parent: normal kivy parent or master of the widget
         :toplevel: , if true will resize based off the toplevel etc

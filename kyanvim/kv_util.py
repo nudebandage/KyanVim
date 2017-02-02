@@ -184,13 +184,13 @@ class KvCanvas(FocusBehavior, _Widget):
         self.canvas.update_cell_text(kvcell, data, fg=fg, bg=bg)
 
     def realloc_dead_cells(self, start, stop, step, count, left, right, rowsize):
-        # print('realloc', f_top, f_bot, a_top, a_bot)
         # kivy 0 is at bottom of screen, invert it with bot-row
         # abs_bot = self._screen.bot
 
         # Scroll Cells that will be clipped so that they sit at the torn/new area
         clipped_cells = range(start, start + count, step)
         new_cells = range(stop, stop + count, step)
+        print('realloc', clipped_cells, new_cells)
         for clip, new in zip(clipped_cells, new_cells):
             kv_row_new = self._screen._cells[new]
             kv_row_clip = self._screen._cells[clip]
@@ -198,10 +198,10 @@ class KvCanvas(FocusBehavior, _Widget):
             for col in range(left, right + 1):
                 kv_clip = kv_row_clip[col].get_canvas_data()
                 kv_new = kv_row_new[col].get_canvas_data()
-                pos_delta = kv_new.pos[1] - kv_clip.pos[1] - 15
+                pos_delta = kv_new.pos[1] - kv_clip.pos[1] - (step * rowsize)
                 # Delete old Canvas element
                 # Scroll clipped region into place
-                kv_clip.scroll(pos_delta)
+                kv_clip.scroll(pos_delta, True)
                 # kv_clip.
 
         # for free_row, alloc_row in zip(range(f_top, f_bot), range(a_top, a_bot)):
@@ -249,11 +249,10 @@ class KvCanvas(FocusBehavior, _Widget):
         # Realloc deletede cells to the new/torn canvas region
         self.realloc_dead_cells(start, stop, step, count, left, right, rowsize)
 
-
-        print(self._screen._cells)
+        # print(self._screen._cells)
         self._screen.scroll(count)
         print()
-        print(self._screen._cells)
+        # print(self._screen._cells)
         self.stop = 1
         return 
 
