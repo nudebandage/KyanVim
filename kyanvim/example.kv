@@ -1,25 +1,40 @@
 <RootWidget>:
     app:app
     kv_1:kv_1
-    # Label:
-        # text: 'Some Example App'
-    MyEditor:
-        id: kv_1
-        size: root.size
-        pos: root.pos
-        # pos: (0, 100)
-        canvas:
-            Color:
-                rgba: 0, 1, 1, 0.5
-            Rectangle:
-                pos: self.pos
-                size: self.size
+    BoxLayout:
         Label:
-            text: 'Some Example App'
-            canvas:
-                Color:
-                    rgba: 0, 0.5, 0, 0.5
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
+            text: 'Some Layout'
+        RelativeLayout:
+            MyEditor:
+                id: kv_1
+                size: root.size
+                pos: 50, 100
+                # pos: (0, 100)
+                canvas:
+                    Color:
+                        rgba: 0, 1, 0, 0.5
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+    DebugPanel:
+        size_hint: (.2, .1)
+        pos_hint: {'x': .225, 'y': .025}
+        # Label:
+            # text: 'Some Example App'
+            # canvas:
+                # Color:
+                    # rgba: 0, 0.5, 0, 0.5
+                # Rectangle:
+                    # pos: self.pos
+                    # size: self.size
         # text: 'hfdsaf'
+
+<DebugPanel>:
+    Label:
+        pos: root.pos
+        size: root.size
+        font_size: root.size[1]*.5
+        halign: 'center'
+        valign: 'middle'
+        color: (1,1,1,1)
+        text: 'FPS: ' + root.fps if root.fps != None else 'FPS:'
