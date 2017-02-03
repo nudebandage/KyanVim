@@ -1,6 +1,9 @@
 """Common code for graphical and text UIs."""
 __all__ = ('Screen',)
 
+from copy import copy
+
+from kivy.utils import get_color_from_hex
 
 from kyanvim.util import _stringify_color
 from kyanvim.util import _split_color, _invert_color
@@ -10,6 +13,7 @@ class Cell(object):
     def __init__(self):
         self.text = ' '
         self.attrs = None
+        self.canvas_data = None
 
     def __repr__(self):
         return self.text
@@ -21,58 +25,54 @@ class Cell(object):
         self.text = text
         self.attrs = attrs
 
-    def copy(self, other):
-        other.text = self.text
-        other.attrs = self.attrs
+    def set_canvas_data(self, data):
+        self.canvas_data = data
+
+    def get_canvas_data(self):
+        return self.canvas_data
+
+class DirtyRange():
+    ''' Record sections that are dirty '''
+    def __init__(self, top, left, bot, right):
+        self.top = top
+        self.left = left
+        self.bot = bot
+        self.right = right
+
+    def __repr__(self):
+        return "%s.%s - %s.%s" % (self.top, self.left, self.bot, self.right)
 
 class DirtyState():
     '''
     Return information about cells that require updating
     '''
     def __init__(self):
-        self.top = None
-        self.left = None
-        self.bot = None
-        self.right = None
+        self.dirty_ranges = []
 
     def changed(self, top, left, bot, right):
         '''mark some section as being dirty'''
-        if self.top == None:
-            self.top = top
-        else:
-            self.top = min(self.top, top)
-        if self.left == None:
-            self.left = left
-        else:
-            self.left = min(self.left, left)
-        if self.bot == None:
-            self.bot = bot
-        else:
-            self.bot = max(self.bot, bot)
-        if self.right == None:
-            self.right = right
-        else:
-            self.right = max(self.right, right)
+        # if self.dirty_ranges:
+            # last = self.dirty_ranges[-1]
+            # if last.right == left and last.bot == top:
+                # last.right = right
+                # last.bot = bot
+                # return
+        self.dirty_ranges.append(DirtyRange(top, left, bot, right))
 
     def get(self):
         ''' get the areas that are dirty, call is_dirty first'''
-        return self.top, self.left, self.bot, self.right
+        for rng in self.dirty_ranges:
+            yield rng.top, rng.left, rng.bot, rng.right
 
     def reset(self):
         '''mark the state as being not dirty'''
-        self.top = None
-        self.left = None
-        self.bot = None
-        self.right = None
+        self.dirty_ranges = []
 
     def is_dirty(self):
-        if (self.top == None and self.bot == None
-            and self.left == None and self.right == None):
-            return False
-        # TODO Remove
-        assert(self.top != None and self.left != None
-               and self.bot != None and self.right != None)
-        return True
+        if self.dirty_ranges:
+            return True
+        return False
+
 
 class UiAttrsCache():
     def __init__(self):
@@ -127,8 +127,8 @@ class UiAttrsCache():
             c['background'] = _invert_color(*_split_color(bg))
             c['foreground'] = _stringify_color(*c['foreground'])
             c['background'] = _stringify_color(*c['background'])
-            n['foreground'] = _stringify_color(*n['foreground'])
-            n['background'] = _stringify_color(*n['background'])
+            n['foreground'] = get_color_from_hex(_stringify_color(*n['foreground']))
+            n['background'] = get_color_from_hex(_stringify_color(*n['background']))
             rv = (n, c)
             self.cache[hash] = rv
         return rv
@@ -188,11 +188,11 @@ class Screen(object):
 
     def clear(self):
         """Clear the screen."""
-        self._clear_region(self.top, self.bot, self.left, self.right)
+        self._clear_region(self.top, self.left, self.bot, self.right)
 
     def eol_clear(self):
         """Clear from the cursor position to the end of the scroll region."""
-        self._clear_region(self.row, self.row, self.col, self.right)
+        self._clear_region(self.row, self.col, self.row, self.right)
 
     def cursor_goto(self, row, col):
         """Change the virtual cursor position."""
@@ -218,17 +218,32 @@ class Screen(object):
             start = bot
             stop = top - count - 1
             step = -1
-        # shift the cells
+
+        # Hold clipped cells that will be deleted by the shift
+        clipped_cells = []
+        for clip in range(start, start + count, step):
+            new_row = []
+            source_row = self._cells[clip]
+            for col in range(left, right + 1):
+                new_row.append(source_row[col].get_canvas_data())
+            clipped_cells.append(new_row)
+
+        # shift the cells, clipped cells now overwritten
         for row in range(start, stop, step):
             target_row = self._cells[row]
             source_row = self._cells[row + count]
             for col in range(left, right + 1):
-                tgt = target_row[col]
-                source_row[col].copy(tgt)
-        # clear invalid cells
-        for row in range(stop, stop + count, step):
-            self._clear_region(row, row, left, right)
-        self._dirty.changed(top, left, bot, right)
+                target_row[col] = copy(source_row[col])
+
+        # This is a ui optimization
+        # Insert the deleted cells in the invalidated space
+        invalid = range(stop, stop + count, step)
+        for clip_row, row in zip(clipped_cells, invalid):
+            invalid_row = self._cells[row]
+            for col in range(left, right + 1):
+                invalid_row[col].set_canvas_data(clip_row[col])
+            # Clear the invalidated regions
+            self._clear_region(stop, left, stop, right)
 
     def put(self, text):
         """Put character on virtual cursor position."""
@@ -240,14 +255,43 @@ class Screen(object):
         self.cursor_goto(self.row, self.col + 1)
 
     def get_cell(self, row, col):
-        """Get text, attrs at row, col."""
-        return self._cells[row][col].get()
+        """Get cell at row, col."""
+        return self._cells[row][col]
 
     def get_cursor(self):
         """Get text, attrs at the virtual cursor position."""
-        return self.get_cell(self.row, self.col)
+        return self.get_cell(self.row, self.col).get()
 
-    def iter(self, startrow, endrow, startcol, endcol):
+    def iter(self, top, left, bot, right):
+        """iter over cells"""
+        for row in range(top, bot + 1):
+            r = self._cells[row]
+            for col in range(left, right + 1):
+                cell = r[col]
+                yield cell
+
+    def iter_pos(self, top, left, bot, right):
+        for row in range(top, bot + 1):
+            r = self._cells[row]
+            for col in range(left, right + 1):
+                cell = r[col]
+                yield row, col, cell
+
+
+    def iter_del(self, top, left, bot, right):
+        for cell in self.iter(top, left, bot, right):
+            yield cell
+
+        # Full line
+        if len(self._cells[0]) == right + 1 - left:
+            print('DEL FULL LINE', self._cells[top:bot])
+            del self._cells[top:bot+1]
+        # partial
+        else:
+            for row in self._cells:
+                del row[left:right+1]
+
+    def iter_text(self, startrow, endrow, startcol, endcol):
         """Extract text/attrs at row, startcol-endcol."""
         for row in range(startrow, endrow + 1):
             r = self._cells[row]
@@ -271,10 +315,40 @@ class Screen(object):
             if buf:
                 yield row, curcol, ''.join(buf), attrs
 
-    def _clear_region(self, top, bot, left, right):
+    def _clear_region(self, top, left, bot, right):
         for rownum in range(top, bot + 1):
             row = self._cells[rownum]
             for colnum in range(left, right + 1):
                 cell = row[colnum]
                 cell.set(' ', self.attrs.ui_cache.get(None))
         self._dirty.changed(top, left, bot, right)
+
+    def iter_create(self, top, left, bot, right):
+        '''
+        create cells and yields them
+        '''
+
+        columns = right + 1 -left
+        rows = top - bot + 1
+
+        attrs = self.attrs.ui_cache.get(None)
+        new_cells = [[Cell() for c in range(columns)] for r in range(rows)]
+        map(lambda x: x.set_cell(' ', attrs), new_cells)
+
+        # Full line
+        import pdb;pdb.set_trace()
+        if len(self._cells[0]) == columns:
+            for i, row in enumerate(new_cells):
+                self._cells.insert(top + i, row)
+        # partial
+        else:
+            for i, row in enumerate(new_cells):
+                for j, col in enumerate(row):
+                    self._cells[top + i].insert(left +j, col)
+
+        import pdb;pdb.set_trace()
+        for row in range(top, bot + 1):
+            r = self._cells[row]
+            for col in range(left, right + 1):
+                cell = r[col]
+                yield row, col, cell

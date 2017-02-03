@@ -7,22 +7,14 @@ Implements a UI for neovim  using tkinter.
 * The widget is filled with spaces
 '''
 import os
-import sys
-import time
 import math
 
-from kivy.app import App
-from kivy.uix.widget import Widget
-from kivy.uix.textinput import TextInput
-from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.core.window import WindowBase
 
-from kyanvim.util import attach_headless, attach_child
+from kyanvim.util import attach_headless, attach_child, attach
 from kyanvim.ui_bridge import UIBridge
-from kyanvim.screen import Screen
 from kyanvim import kv_util
-from kyanvim.util import debug_echo, _stringify_key
+from kyanvim.util import debug_echo, _stringify_key, rate_limited
 
 RESIZE_DELAY = 0.04
 
@@ -76,9 +68,7 @@ KEY_TABLE = {
     # 'Enter': 'CR',
 }
 
-ITEMS = {}
-
-class MixTk():
+class MixKv():
     '''
     Tkinter actions we bind and use to communicate to neovim
     '''
@@ -91,8 +81,11 @@ class MixTk():
     def _kv_key_pressed(self, kb, keycode, text, modifiers):
         assert text != ''
         assert len(modifiers) < 2
+        if keycode[1] == 'f5':
+            abc = self.widget._screen._cells
+            import pdb;pdb.set_trace()
 
-        print(text, chr(keycode[0]), keycode[0], keycode[1], modifiers)
+        # print(text, chr(keycode[0]), keycode[0], keycode[1], modifiers)
         # Single or multi key mod pressed (without a key)
         if keycode[1] in KV_MODS:
             # print('MOD PRESESD GTFO')
@@ -115,11 +108,6 @@ class MixTk():
             state = None
         input_str = _stringify_key(KEY_TABLE.get(keycode[1], keycode[1]), state)
         self._bridge.input(input_str)
-        # If an escape was pressed we must refocus ourselves fml kivy
-        #TODO failing
-        if keycode[0] == 27:
-            self.widget.focus = True
-        return True
 
     def _tk_quit(self, *args):
         self._bridge.exit()
@@ -158,7 +146,7 @@ class MixTk():
         self.canvas.unbind('<Configure>', self._configure_id)
 
 
-class NvimHandler(MixTk):
+class NvimHandler(MixKv):
     '''These methods get called by neovim'''
 
     def __init__(self, widget, toplevel, address=-1, debug_echo=False):
@@ -167,7 +155,6 @@ class NvimHandler(MixTk):
         self.debug_echo = debug_echo
 
         self._insert_cursor = False
-        self._screen = None
         self._colsize = None
         self._rowsize = None
 
@@ -175,12 +162,9 @@ class NvimHandler(MixTk):
         self.connected = False
         # Connecition Info for neovim
         self.address = address
-        cols = 80
-        rows = 24
-        self.current_cols = cols
-        self.current_rows = rows
+        self.current_cols = self.widget._screen.right + 1
+        self.current_rows = self.widget._screen.bot + 1
 
-        self._screen = Screen(cols, rows)
         self._bridge = UIBridge()
 
         # The negative number makes it pixels instead of point sizes
@@ -210,7 +194,7 @@ class NvimHandler(MixTk):
             nvim = attach_child(nvim_args=nvim_args, exec_name=exec_name)
 
         self._bridge.connect(nvim, self.widget)
-        self._screen = Screen(self.current_cols, self.current_rows)
+        # self._screen = Screen(self.current_cols, self.current_rows)
         self._bridge.attach(self.current_cols, self.current_rows, rgb=True)
         # if len(sys.argv) > 1:
             # nvim.command('edit ' + sys.argv[1])
@@ -225,9 +209,9 @@ class NvimHandler(MixTk):
         # Make sure it works when user changes font,
         # only can support mono font i think..
         # self._screen = Screen(cols, rows)
-        self._screen.resize(cols, rows)
+        # self.widget._screen.resize(cols, rows)
         top, left, bot, right = 0, 0, rows-1, cols-1
-        self.widget._destroy_cells(top, bot, left, right)
+        self.widget._destroy_cells(cols, rows)
         self.widget._create_cells(top, left, bot, right,
                                   self._rowsize, self._colsize)
 
@@ -236,19 +220,19 @@ class NvimHandler(MixTk):
         '''
         wipe everyything, even the ~ and status bar
         '''
-        self._screen.clear()
+        self.widget._screen.clear()
 
     # @debug_echo
     def _nvim_eol_clear(self):
         '''
         clear from cursor position to the end of the line
         '''
-        self._screen.eol_clear()
+        self.widget._screen.eol_clear()
 
     # @debug_echo
     def _nvim_cursor_goto(self, row, col):
         '''Move gui cursor to position'''
-        self._screen.cursor_goto(row, col)
+        self.widget._screen.cursor_goto(row, col)
 
     # @debug_echo
     def _nvim_busy_start(self):
@@ -269,15 +253,15 @@ class NvimHandler(MixTk):
 
     # @debug_echo
     def _nvim_set_scroll_region(self, top, bot, left, right):
-        self._screen.set_scroll_region(top, bot, left, right)
+        self.widget._screen.set_scroll_region(top, bot, left, right)
 
     # @debug_echo
     def _nvim_scroll(self, count):
-        self._screen.scroll(count)
+        self.widget._scroll_cells(count, self._rowsize)
 
     # @debug_echo
     def _nvim_highlight_set(self, attrs):
-        self._screen.attrs.set_next(attrs)
+        self.widget._screen.attrs.set_next(attrs)
 
     # @debug_echo
     def _nvim_put(self, text):
@@ -285,7 +269,7 @@ class NvimHandler(MixTk):
         put a charachter into position, we only write the lines
         when a new row is being edited
         '''
-        self._screen.put(text)
+        self.widget._screen.put(text)
 
     def _nvim_bell(self):
         pass
@@ -295,15 +279,15 @@ class NvimHandler(MixTk):
 
     # @debug_echo
     def _nvim_update_fg(self, fg):
-        self._screen.attrs.set_default('foreground', fg)
+        self.widget._screen.attrs.set_default('foreground', fg)
 
     # @debug_echo
     def _nvim_update_bg(self, bg):
-        self._screen.attrs.set_default('background', bg)
+        self.widget._screen.attrs.set_default('background', bg)
 
     # @debug_echo
     def _nvim_update_sp(self, sp):
-        self._screen.attrs.set_default('special', sp)
+        self.widget._screen.attrs.set_default('special', sp)
 
     # @debug_echo
     def _nvim_update_suspend(self, arg):
@@ -316,20 +300,19 @@ class NvimHandler(MixTk):
     # @debug_echo
     def _nvim_set_icon(self, icon):
         pass
-        # self._icon = tk.PhotoImage(file=icon)
-        # self.root.tk.call('wm', 'iconphoto', self.root._w, self._icon)
 
     # @debug_echo
+    # @rate_limited(9, mode='kill')
     def _flush(self):
-        if self._screen._dirty.is_dirty():
-            top, left, bot, right = self._screen._dirty.get()
-            # print('reparing ', '%s.%s' % (top, left), '%s.%s' % (bot, right))
-            # print('max ', '%s.%s' % (self._screen.top, self._screen.left), '%s.%s' % (self._screen.bot, self._screen.right))
-            for row, col, text, attrs in self._screen.iter(
+        if self.widget._screen._dirty.is_dirty():
+            # if hasattr(self.widget, 'stop'):
+                # return
+            for top, left, bot, right in self.widget._screen._dirty.get():
+                for row, col, text, attrs in self.widget._screen.iter_text(
                                         top, bot, left, right) :
-                self._draw(row, col, text, attrs)
-                # print(row, col, text, attrs)
-            self._screen._dirty.reset()
+                    self._draw(row, col, text, attrs)
+                    # print('drawing:',repr(text), 'at', row, col)
+            self.widget._screen._dirty.reset()
 
 
     # @debug_echo
@@ -337,23 +320,20 @@ class NvimHandler(MixTk):
         '''
         updates a line :) from row,col to eol using attrs
         '''
-        end = col + len(data)
         # font = self._fnormal
         fg = attrs[0]['foreground']
         bg = attrs[0]['background']
-        for i, c in enumerate(range(col, end)):
-            self.widget._update_cell(row, c, data[i], 13, fg, bg, self._screen.bot)
+        self.widget._update_cell_range(row, col, data, fg, bg)
 
 
     @debug_echo
     def _nvim_exit(self, arg):
         print('in exit')
-        import pdb;pdb.set_trace()
         # self.root.destroy()
 
 class KyanVimEditor(kv_util.KvCanvas):
     '''namespace for neovim related methods,
-    requests are generally prefixed with _tk_,
+    requests are generally prefixed with _kv_,
     responses are prefixed with _nvim_
     '''
     # we get keys, mouse movements inside tkinter, using binds,
@@ -369,7 +349,7 @@ class KyanVimEditor(kv_util.KvCanvas):
     # So we can shutdown the neovim connections
     instances = []
 
-    def __init__(self, *_, address=False, toplevel=False, **kwargs):
+    def __init__(self, *_, columns=80, rows=24, address=False, toplevel=False, **kwargs):
         '''
         :parent: normal kivy parent or master of the widget
         :toplevel: , if true will resize based off the toplevel etc
@@ -380,11 +360,11 @@ class KyanVimEditor(kv_util.KvCanvas):
             'headless'
         :kwargs: config options for text widget
         '''
-        kv_util.KvCanvas.__init__(self, **kwargs)
+        kv_util.KvCanvas.__init__(self, columns=columns, rows=rows, **kwargs)
         self.nvim_handler = NvimHandler(widget=self,
                                         toplevel=toplevel,
                                         address=address,
-                                        debug_echo=True)
+                                        debug_echo=False)
 
         # TODO weak ref?
         KyanVimEditor.instances.append(self)
@@ -401,7 +381,18 @@ class KyanVimEditor(kv_util.KvCanvas):
         # self.bindtags(tuple(bindtags))
 
         self.keyboard_on_key_down = self.nvim_handler._kv_key_pressed
+        self.canvas.on_resize = lambda x,y: print('ON RESIZE', x, y)
+        self.on_pos = lambda x,y: print('ON pos', x, y)
+        self.on_size = lambda x,y: print('ON size', x, y)
         # self.bind('<Key>', self.nvim_handler._kv_key_pressed)
+
+        #TODO failing
+        def ignore_escape(window, keycode):
+            # If an escape was pressed we must refocus ourselves fml kivy
+            if keycode[0] == 27:
+                self.focus = True
+            return True
+        self.keyboard_on_key_up = ignore_escape
 
         # self.bind('<Button-1>', lambda e: self.focus_set())
 
@@ -423,12 +414,12 @@ class KyanVimEditor(kv_util.KvCanvas):
                 print('End')
                 print()
             # self.nvim_handler._start_blinking()
-        Clock.schedule_once(do, 0)
+        Clock.schedule_once(do, -1)
 
 
     def quit(self):
-        print('do quit..')
-        # Clock.schedule_once(self.app.quit, 1)
+        print('TODO do quit..')
+        # Clock.schedule_once(lambda x: self.:cremove_widget(self), 1)
         # self.root.after_idle(self.root.quit)
 
 if __name__ == '__main__':
