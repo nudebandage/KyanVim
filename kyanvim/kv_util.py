@@ -83,8 +83,8 @@ class KvCell(BaseWidget):
     def scroll(self, y:int, p=False):
         orig = self.pos[1]
         self.pos = (self.pos[0], self.pos[1] + y)
-        if p:
-            print(orig, self.pos[1])
+        # if p:
+            # print(orig, self.pos[1])
         self.k_bg_rect.pos = self.pos
         self.k_fg_rect.pos = self.pos
         global a, b, c
@@ -130,7 +130,7 @@ class KvCanvas(FocusBehavior, _Widget):
         a  = choice((1, 0, .5, .75))
         b  = choice((1, 0., .5))
         c  = choice((1, 0, .5))
-        print('deltingin', top, bot)
+        # print('deltingin', top, bot)
         for cell in kv_cells:
             # print(cell)
             # cell.canvas.clear()
@@ -190,11 +190,11 @@ class KvCanvas(FocusBehavior, _Widget):
         # Scroll Cells that will be clipped so that they sit at the torn/new area
         clipped_cells = range(start, start + count, step)
         new_cells = range(stop, stop + count, step)
-        print('realloc', clipped_cells, new_cells)
+        # print('realloc', clipped_cells, new_cells)
         for clip, new in zip(clipped_cells, new_cells):
             kv_row_new = self._screen._cells[new]
             kv_row_clip = self._screen._cells[clip]
-            print('clipped widget', kv_row_clip[:5], kv_row_new[:5])
+            # print('clipped widget', kv_row_clip[:5], kv_row_new[:5])
             for col in range(left, right + 1):
                 kv_clip = kv_row_clip[col].get_canvas_data()
                 kv_new = kv_row_new[col].get_canvas_data()
