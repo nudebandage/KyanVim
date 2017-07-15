@@ -248,7 +248,12 @@ class NvimHandler(MixKv):
         self.mouse_enabled = False
 
     # @debug_echo
-    def _nvim_mode_change(self, mode):
+    def _nvim_mode_info_set(self, cursor_style_enabled, mode_info):
+        # TODO
+        pass
+
+    # @debug_echo
+    def _nvim_mode_change(self, mode, mode_idx):
         self._insert_cursor = mode == 'insert'
 
     # @debug_echo
