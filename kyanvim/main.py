@@ -16,6 +16,8 @@ from kyanvim.ui_bridge import UIBridge
 from kyanvim import kv_util
 from kyanvim.util import debug_echo, _stringify_key, rate_limited
 
+from kyanvim.util import timerfunc
+
 RESIZE_DELAY = 0.04
 
 def parse_tk_state(state):
@@ -153,6 +155,7 @@ class NvimHandler(MixKv):
         self.widget = widget
         self.toplevel = toplevel
         self.debug_echo = debug_echo
+        # self.debug_echo = True
 
         self._insert_cursor = False
         self._colsize = None
@@ -205,34 +208,26 @@ class NvimHandler(MixKv):
     @debug_echo
     def _nvim_resize(self, cols, rows):
         '''Let neovim update tkinter when neovim changes size'''
-        # TODO
-        # Make sure it works when user changes font,
-        # only can support mono font i think..
-        # self._screen = Screen(cols, rows)
-        # self.widget._screen.resize(cols, rows)
-        top, left, bot, right = 0, 0, rows-1, cols-1
-        self.widget._destroy_cells(cols, rows)
-        self.widget._create_cells(top, left, bot, right,
-                                  self._rowsize, self._colsize)
+        self.widget._resize(cols, rows, self._rowsize, self._colsize)
 
     # @debug_echo
     def _nvim_clear(self):
         '''
         wipe everyything, even the ~ and status bar
         '''
-        self.widget._screen.clear()
+        self.widget._clear()
 
     # @debug_echo
     def _nvim_eol_clear(self):
         '''
         clear from cursor position to the end of the line
         '''
-        self.widget._screen.eol_clear()
+        self.widget._eol_clear()
 
     # @debug_echo
     def _nvim_cursor_goto(self, row, col):
         '''Move gui cursor to position'''
-        self.widget._screen.cursor_goto(row, col)
+        self.widget._cursor_goto(row, col)
 
     # @debug_echo
     def _nvim_busy_start(self):
@@ -258,7 +253,7 @@ class NvimHandler(MixKv):
 
     # @debug_echo
     def _nvim_set_scroll_region(self, top, bot, left, right):
-        self.widget._screen.set_scroll_region(top, bot, left, right)
+        self.widget._set_scroll_region(top, bot, left, right)
 
     # @debug_echo
     def _nvim_scroll(self, count):
@@ -266,7 +261,7 @@ class NvimHandler(MixKv):
 
     # @debug_echo
     def _nvim_highlight_set(self, attrs):
-        self.widget._screen.attrs.set_next(attrs)
+        self.widget._set_attrs_next(attrs)
 
     # @debug_echo
     def _nvim_put(self, text):
@@ -274,7 +269,7 @@ class NvimHandler(MixKv):
         put a charachter into position, we only write the lines
         when a new row is being edited
         '''
-        self.widget._screen.put(text)
+        self.widget._put(text)
 
     def _nvim_bell(self):
         pass
@@ -284,15 +279,15 @@ class NvimHandler(MixKv):
 
     # @debug_echo
     def _nvim_update_fg(self, fg):
-        self.widget._screen.attrs.set_default('foreground', fg)
+        self.widget._update_fg(fg)
 
     # @debug_echo
     def _nvim_update_bg(self, bg):
-        self.widget._screen.attrs.set_default('background', bg)
+        self.widget._update_bg(bg)
 
     # @debug_echo
     def _nvim_update_sp(self, sp):
-        self.widget._screen.attrs.set_default('special', sp)
+        self.widget._update_sp(sp)
 
     # @debug_echo
     def _nvim_update_suspend(self, arg):
@@ -306,21 +301,32 @@ class NvimHandler(MixKv):
     def _nvim_set_icon(self, icon):
         pass
 
-    # @debug_echo
     # @rate_limited(9, mode='kill')
+    @timerfunc
+    @debug_echo
     def _flush(self):
         if self.widget._screen._dirty.is_dirty():
             # if hasattr(self.widget, 'stop'):
                 # return
             for top, left, bot, right in self.widget._screen._dirty.get():
                 for row, col, text, attrs in self.widget._screen.iter_text(
-                                        top, bot, left, right) :
+                                        top, bot, left, right):
                     self._draw(row, col, text, attrs)
                     # print('drawing:',repr(text), 'at', row, col)
             self.widget._screen._dirty.reset()
 
+    @timerfunc
+    def _full_flush(self):
+        top = self.widget._screen.top
+        left = self.widget._screen.left
+        bot = self.widget._screen.bot
+        right = self.widget._screen.right
+        for row, col, text, attrs in self.widget._screen.iter_text(
+                top, bot, left, right):
+            self._draw(row, col, text, attrs)
 
-    # @debug_echo
+
+    @debug_echo
     def _draw(self, row, col, data, attrs):
         '''
         updates a line :) from row,col to eol using attrs
@@ -415,6 +421,7 @@ class KyanVimEditor(kv_util.KvCanvas):
                 print('Begin')
             apply_updates()
             self.nvim_handler._flush()
+            # self.nvim_handler._full_flush()
             if self.nvim_handler.debug_echo:
                 print('End')
                 print()
