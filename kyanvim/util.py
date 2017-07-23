@@ -23,7 +23,7 @@ def attach_socket(path=None):
                     stdin=PIPE, stdout=PIPE, shell=True)
         proc.communicate()
 
-    # THIS IS DOESNT WORK UNRELIBALE 
+    # THIS IS DOESNT WORK UNRELIBALE
     #path = os.environ.get('NVIM_LISTEN_ADDRESS')
     if not path:
         print('threading')
@@ -175,3 +175,20 @@ def rate_limited(max_per_second, mode='wait', delay_first_call=False):
         return rate_limited_function
     return decorate
 
+def timerfunc(func):
+    """
+    A timer decorator
+    """
+    def function_timer(*args, **kwargs):
+        """
+        A nested function for timing other functions
+        """
+        start = time.time()
+        value = func(*args, **kwargs)
+        end = time.time()
+        runtime = end - start
+        msg = "{func} - {time} milliseconds"
+        print(msg.format(func=func.__name__,
+                         time=runtime*1000))
+        return value
+    return function_timer
