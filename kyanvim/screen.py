@@ -13,8 +13,7 @@ class Cell(object):
     def __init__(self):
         self.text = ' '
         self.attrs = None
-        self.canvas_data = None
-
+        self.canvas_data = None 
     def __repr__(self):
         return self.text
 
@@ -235,15 +234,10 @@ class Screen(object):
             for col in range(left, right + 1):
                 target_row[col] = copy(source_row[col])
 
-        # This is a ui optimization
-        # Insert the deleted cells in the invalidated space
-        invalid = range(stop, stop + count, step)
-        for clip_row, row in zip(clipped_cells, invalid):
-            invalid_row = self._cells[row]
-            for col in range(left, right + 1):
-                invalid_row[col].set_canvas_data(clip_row[col])
-            # Clear the invalidated regions
-            self._clear_region(stop, left, stop, right)
+        # clear invalid cells
+        for row in range(stop, stop + count, step):
+            self._clear_region(row, row, left, right)
+
 
     def put(self, text):
         """Put character on virtual cursor position."""
