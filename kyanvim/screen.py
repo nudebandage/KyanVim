@@ -2,6 +2,7 @@
 __all__ = ('Screen',)
 
 from copy import copy
+import pprint
 
 from kivy.utils import get_color_from_hex
 
@@ -178,6 +179,18 @@ class Screen(object):
         self.attrs = Attrs()
         self._dirty = DirtyState()
         self._dirty.changed(self.top, self.left, self.bot, self.right)
+
+    def __repr__(self):
+        _lines = []
+        for row in self._cells:
+            tmp = []
+            for cell in row:
+                if cell.text:
+                    tmp.append(cell.text)
+                else:
+                    tmp.append(' ')
+            _lines.append(''.join(tmp))
+        return pprint.pformat(_lines, indent=0)
 
     def resize(self, cols , rows):
         # attrs shoild stick around

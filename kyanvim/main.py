@@ -18,7 +18,8 @@ from kyanvim.util import debug_echo, _stringify_key, rate_limited
 
 from kyanvim.util import timerfunc
 
-RESIZE_DELAY = 0.04
+# RESIZE_DELAY = 0.04
+RESIZE_DELAY = 1
 
 def parse_tk_state(state):
     if state & 0x4:
@@ -111,23 +112,27 @@ class MixKv():
         input_str = _stringify_key(KEY_TABLE.get(keycode[1], keycode[1]), state)
         self._bridge.input(input_str)
 
-    def _tk_quit(self, *args):
-        self._bridge.exit()
 
-    # @rate_limited(1/RESIZE_DELAY, mode='kill')
-    def _tk_resize(self, event):
+    @debug_echo
+    @rate_limited(1/RESIZE_DELAY, mode='kill')
+    def _kv_resize(self, _, size):
         '''Let Neovim know we are changing size'''
-        cols = int(math.floor(event.width / self._colsize))
-        rows = int(math.floor(event.height / self._rowsize))
-        if self._screen.columns == cols:
-            if self._screen.rows == rows:
+        width = size[0]
+        height = size[1]
+        cols = int(math.floor(width / self._colsize))
+        rows = int(math.floor(height / self._rowsize))
+        if self.widget._screen.columns == cols:
+            if self.widget._screen.rows == rows:
                 return
         self.current_cols = cols
         self.current_rows = rows
         self._bridge.resize(cols, rows)
         if self.debug_echo:
             print('resizing c, r, w, h',
-                    cols,rows, event.width, event.height)
+                    cols,rows, width, height)
+
+    def _tk_quit(self, *args):
+        self._bridge.exit()
 
 
     def bind_resize(self):
@@ -208,6 +213,7 @@ class NvimHandler(MixKv):
     @debug_echo
     def _nvim_resize(self, cols, rows):
         '''Let neovim update tkinter when neovim changes size'''
+        print('resizing widget in screen', cols, rows)
         self.widget._resize(cols, rows, self._rowsize, self._colsize)
 
     # @debug_echo
@@ -311,20 +317,31 @@ class NvimHandler(MixKv):
             for top, left, bot, right in self.widget._screen._dirty.get():
                 for row, col, text, attrs in self.widget._screen.iter_text(
                                         top, bot, left, right):
-                    self._draw(row, col, text, attrs)
+                    # self._draw(row, col, text, attrs)
+                    self._draw2(row, col, text, attrs)
+
+            # self.widget._update_graphics_ev()
                     # print('drawing:',repr(text), 'at', row, col)
             self.widget._screen._dirty.reset()
 
     @timerfunc
     def _full_flush(self):
-        top = self.widget._screen.top
-        left = self.widget._screen.left
-        bot = self.widget._screen.bot
-        right = self.widget._screen.right
-        for row, col, text, attrs in self.widget._screen.iter_text(
-                top, bot, left, right):
-            self._draw(row, col, text, attrs)
+        self.widget._lines = []
+        for row in self.widget._screen._cells:
+            self.widget._lines.append(''.join(cell.text for cell in row))
+        self.widget.update_all()
+        self.widget._trigger_update_graphics()
 
+    def _draw2(self, row, col, data, attrs):
+        self.widget.background_color = attrs[0]['background']
+        self.widget.cursor_color = attrs[0]['foreground']
+        self.widget._set_cursor([col, row])
+        self.widget.insert_text(data)
+        self.widget._update_graphics_ev.cancel()
+
+    @timerfunc
+    def abcde(self, data):
+        self.widget.insert_text(data)
 
     @debug_echo
     def _draw(self, row, col, data, attrs):
@@ -342,7 +359,7 @@ class NvimHandler(MixKv):
         print('in exit')
         # self.root.destroy()
 
-class KyanVimEditor(kv_util.KvCanvas):
+class KyanVimEditor(kv_util.KvFull):
     '''namespace for neovim related methods,
     requests are generally prefixed with _kv_,
     responses are prefixed with _nvim_
@@ -371,7 +388,7 @@ class KyanVimEditor(kv_util.KvCanvas):
             'headless'
         :kwargs: config options for text widget
         '''
-        kv_util.KvCanvas.__init__(self, columns=columns, rows=rows, **kwargs)
+        super().__init__(columns=columns, rows=rows, **kwargs)
         self.nvim_handler = NvimHandler(widget=self,
                                         toplevel=toplevel,
                                         address=address,
@@ -382,7 +399,6 @@ class KyanVimEditor(kv_util.KvCanvas):
 
     def _nvimkv_config(self, *args):
         '''required config'''
-        pass
         # Hide tkinter cursor
         # self.config(insertontime=0)
 
@@ -392,9 +408,11 @@ class KyanVimEditor(kv_util.KvCanvas):
         # self.bindtags(tuple(bindtags))
 
         self.keyboard_on_key_down = self.nvim_handler._kv_key_pressed
-        self.canvas.on_resize = lambda x,y: print('ON RESIZE', x, y)
-        self.on_pos = lambda x,y: print('ON pos', x, y)
-        self.on_size = lambda x,y: print('ON size', x, y)
+        # TODO
+        self.bind(size=self.nvim_handler._kv_resize)
+        # self.on_resize = lambda x,y: print('ON RESIZE', x, y)
+        # self.on_pos = lambda x,y: print('ON pos', x, y)
+        # self.on_size = lambda x,y: print('ON size', x, y)
         # self.bind('<Key>', self.nvim_handler._kv_key_pressed)
 
         #TODO failing
@@ -420,8 +438,8 @@ class KyanVimEditor(kv_util.KvCanvas):
                 print()
                 print('Begin')
             apply_updates()
-            self.nvim_handler._flush()
-            # self.nvim_handler._full_flush()
+            # self.nvim_handler._flush()
+            self.nvim_handler._full_flush()
             if self.nvim_handler.debug_echo:
                 print('End')
                 print()

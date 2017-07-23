@@ -1,18 +1,24 @@
+# TODO
+# Nested data instead of nested Classes
+
 from random import random as rnd
 from random import choice
 
 from kivy.graphics.texture import Texture
 from kivy.cache import Cache
+from kivy.clock import Clock
 from kivy.graphics import Canvas as BaseCanvas
 from kivy.graphics import Color, Rectangle
 from kivy.core.text import Label as CoreLabel
 from kivy.uix.widget import Widget as BaseWidget
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
 from kivy.utils import get_color_from_hex
 
 from kyanvim.screen import Screen
+from kyanvim.util import timerfunc
 
 Cache_register = Cache.register
 Cache_append = Cache.append
@@ -107,6 +113,7 @@ class _Canvas(BaseCanvas):
         pass
 
 
+# NOT NEEEDED
 class _Widget(BaseWidget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -114,152 +121,218 @@ class _Widget(BaseWidget):
 
 
 #TODO RENAME - > KivyNvim
-class KvCanvas(FocusBehavior, _Widget):
-    def __init__(self, columns, rows, *_, **kwargs):
-        super().__init__(**kwargs)
-        self._screen = Screen(columns, rows)
+class BASE:
+    def _clear(self):
+        self._screen.clear()
 
-    def _destroy_cells(self, columns, rows):
+    def _eol_clear(self):
+        self._screen.eol_clear()
+
+    def _cursor_goto(self, row, col):
+        self._screen.cursor_goto(row, col)
+
+    def _set_scroll_region(self, top, bot, left, right):
+        self._screen.set_scroll_region(top, bot, left, right)
+
+    def _set_attrs_next(self, attrs):
+        self._screen.attrs.set_next(attrs)
+
+    def _put(self, text):
+        self._screen.put(text)
+
+    def _update_fg(self, fg):
+        self._screen.attrs.set_default('foreground', fg)
+
+    def _update_bg(self, bg):
+        self._screen.attrs.set_default('background', bg)
+
+    def _update_sp(self, sp):
+        self._screen.attrs.set_default('special', sp)
+
+    def _resize(self, columns, rows, rowsize, colsize):
         '''destory all cells and reinit the screen to columns and rows'''
         self._screen.resize(columns, rows)
         self.canvas.clear()
 
-    def _destroy_cell_range(self, top, left, bot, right):
-        kv_cells = map(lambda cell: cell.get_canvas_data(),
-                       self._screen.iter_del(top, left, bot, right))
-        a  = choice((1, 0, .5, .75))
-        b  = choice((1, 0., .5))
-        c  = choice((1, 0, .5))
-        print('deltingin', top, bot)
-        for cell in kv_cells:
-            # print(cell)
-            # cell.canvas.clear()
-            cell.k_bg_col.rgba = (a, b, c, 1)
-            cell.k_fg_col.rgba = (a, b, c, 1)
-
-    def _create_cells(self, top, left, bot, right, width, height):
-        '''add cells, kivy 0,0 is bottom left'''
+        top, left, bot, right = 0, 0, rows-1, columns-1
+        # add cells, kivy 0,0 is bottom left'''
         # print('CREATE CELLS', top, left, bot, right)
         attrs = self._screen.attrs.ui_cache.get(None)[0]
         bg = attrs['background']
         fg = attrs['foreground']
 
-        self._screen.resize(right + 1, bot + 1)
-
-        for row in range(top, bot + 1):
-            for col in range(left, right + 1):
+        # for row in range(top, bot + 1):
+            # for col in range(left, right + 1):
                 # kivy 0 is at bottom of screen, invert it with bot-row
-                cell = self._screen.get_cell(row, col)
-                kv_row = bot - row
-                kvcell = self.canvas.create_cell(kv_row, col, width, height, bg, fg)
-                cell.set_canvas_data(kvcell)
-                self.add_widget(kvcell)
-
-    def _create_cell_range(self, top, left, bot, right, width, height):
-        attrs = self._screen.attrs.ui_cache.get(None)[0]
-        bg = attrs['background']
-        fg = attrs['foreground']
-
-        # kivy 0 is at bottom of screen, invert it with bot-row
-        abs_bot = self._screen.bot
-        def gen_cells():
-            for row in range(top, bot + 1):
-                r = self._screen._cells[row]
-                for col in range(left, right + 1):
-                    cell = r[col]
-                    yield row, col, cell
-
-        # The cells are auto created in screen.scroll, we just reposition them
-        for row, col, cell in gen_cells():
-            kv_row = abs_bot - row
-            kvcell = cell.get_canvas_data()
-            pos = (col*width, kv_row*height)
-            self.canvas.update_cell_pos(kvcell, pos=pos)
-            kvcell = self.canvas.create_cell(kv_row, col, width, height, bg, fg)
-            cell.set_canvas_data(kvcell)
-            # self.add_widget(kvcell)
+                # cell = self._screen.get_cell(row, col)
+                # kv_row = bot - row
+                # kvcell = self._canvas.create_cell(kv_row, col, colsize, rowsize, bg, fg)
+                # cell.set_canvas_data(kvcell)
+                # self.add_widget(kvcell)
 
 
     def _update_cell(self, kvcell:KvCell, data:str, fg, bg):
         self.canvas.update_cell_text(kvcell, data, fg=fg, bg=bg)
 
-    def realloc_dead_cells(self, start, stop, step, count, left, right, rowsize):
-        # kivy 0 is at bottom of screen, invert it with bot-row
-        # abs_bot = self._screen.bot
-
-        # Scroll Cells that will be clipped so that they sit at the torn/new area
-        clipped_cells = range(start, start + count, step)
-        new_cells = range(stop, stop + count, step)
-        print('realloc', clipped_cells, new_cells)
-        for clip, new in zip(clipped_cells, new_cells):
-            kv_row_new = self._screen._cells[new]
-            kv_row_clip = self._screen._cells[clip]
-            print('clipped widget', kv_row_clip[:5], kv_row_new[:5])
-            for col in range(left, right + 1):
-                kv_clip = kv_row_clip[col].get_canvas_data()
-                kv_new = kv_row_new[col].get_canvas_data()
-                pos_delta = kv_new.pos[1] - kv_clip.pos[1] - (step * rowsize)
-                # Delete old Canvas element
-                # Scroll clipped region into place
-                kv_clip.scroll(pos_delta, True)
-                # kv_clip.
-
-        # for free_row, alloc_row in zip(range(f_top, f_bot), range(a_top, a_bot)):
-            # print('alloc', free_row, alloc_row)
-            # delta = free_row - alloc_row
-            # kv_row = abs_bot - delta
-            # y = delta * rowsize
-            # r = self._screen._cells[free_row]
-            # for col in range(left, right + 1):
-                # free_cell = r[col]
-                # kvcell = free_cell.get_canvas_data()
-                # kvcell.scroll(y)
-
-
     def _scroll_cells(self, count, rowsize):
-        print('SCROLL')
         top, bot = self._screen.top, self._screen.bot
         left, right = self._screen.left, self._screen.right
 
         if count > 0:
             move_top, move_bot = top + count, bot - count + 1
-            start = top
-            stop = bot - count + 1
-            step = 1
         else:
             move_top, move_bot = top, bot + count
-            start = bot
-            stop = top - count - 1
-            step = -1
-
-        global a, b, c
-        a  = choice((1, .5, .25, .75))
-        b = 0
-        c = 0
 
         # The following two commands only operate on the UI cells
         # Scroll the widget cells
         apply(lambda cell: cell.get_canvas_data().scroll(count*rowsize),
               self._screen.iter(move_top, left, move_bot, right))
 
-        a = 0
-        b  = choice((1, .5, .25, .75))
-        c = 0
-
-        # Realloc deletede cells to the new/torn canvas region
-        self.realloc_dead_cells(start, stop, step, count, left, right, rowsize)
-
-        # print(self._screen._cells)
         self._screen.scroll(count)
-        print()
-        # print(self._screen._cells)
-        self.stop = 1
-        return 
 
     def _update_cell_range(self, row, col, data:str, fg, bg):
         for i, cell in enumerate(self._screen.iter(row, col, row, col -1 + len(data))):
 
             self._update_cell(cell.get_canvas_data(), data[i], fg, bg)
+
+    def update_line(self, row, col, substring, attrs):
+        text = self._lines[row]
+        new_text = text[:col] + substring + text[col:]
+        self._set_line_text(row, new_text)
+
+
+class KvCanvas(FocusBehavior, BASE, _Widget):
+    def __init__(self, columns, rows, *_, **kwargs):
+        super().__init__(**kwargs)
+        self._screen = Screen(columns, rows)
+
+
+class KvFull(TextInput, BASE):
+    """
+    At the moment just implement the full Textinput
+    We repaint the entire screen.
+    """
+    def __init__(self, columns, rows, *_, **kwargs):
+        TextInput.__init__(self, **kwargs)
+        self._screen = Screen(columns, rows)
+        # import pdb;pdb.set_trace()
+        # self._update_graphics_ev = Clock.create_trigger(
+            # self._update_graphics, -1)
+
+
+    def _trigger_update_graphics(self, *largs):
+        ''' Can be called multiple times and will only update once '''
+        self._update_graphics_ev.cancel()
+        self._update_graphics_ev()
+
+    def _update_graphics(self, *largs):
+        # Update all the graphics according to the current internal values.
+        self.canvas.clear()
+        add = self.canvas.add
+
+        lh = self.line_height
+        dy = lh + self.line_spacing
+
+        # TODO del
+        # adjust view if the cursor is going outside the bounds
+        sx = self.scroll_x
+        sy = self.scroll_y
+
+        # draw labels
+        if not self._lines or (
+                not self._lines[0] and len(self._lines) == 1):
+            rects = self._hint_text_rects
+            labels = self._hint_text_labels
+            lines = self._hint_text_lines
+        else:
+            rects = self._lines_rects
+            labels = self._lines_labels
+            lines = self._lines
+        padding_left, padding_top, padding_right, padding_bottom = self.padding
+        x = self.x + padding_left
+        y = self.top - padding_top + sy
+        miny = self.y + padding_bottom
+        maxy = self.top - padding_top
+        for line_num, value in enumerate(lines):
+            if miny <= y <= maxy + dy:
+                texture = labels[line_num]
+                size = list(texture.size)
+                texc = texture.tex_coords[:]
+
+                # calcul coordinate
+                viewport_pos = sx, 0
+                vw = self.width - padding_left - padding_right
+                vh = self.height - padding_top - padding_bottom
+                tw, th = list(map(float, size))
+                oh, ow = tch, tcw = texc[1:3]
+                tcx, tcy = 0, 0
+
+                # adjust size/texcoord according to viewport
+                if viewport_pos:
+                    tcx, tcy = viewport_pos
+                    tcx = tcx / tw * (ow)
+                    tcy = tcy / th * oh
+                if tw - viewport_pos[0] < vw:
+                    tcw = tcw - tcx
+                    size[0] = tcw * size[0]
+                elif vw < tw:
+                    tcw = (vw / tw) * tcw
+                    size[0] = vw
+                if vh < th:
+                    tch = (vh / th) * tch
+                    size[1] = vh
+
+                # cropping
+                mlh = lh
+                if y > maxy:
+                    vh = (maxy - y + lh)
+                    tch = (vh / float(lh)) * oh
+                    tcy = oh - tch
+                    size[1] = vh
+                if y - lh < miny:
+                    diff = miny - (y - lh)
+                    y += diff
+                    vh = lh - diff
+                    tch = (vh / float(lh)) * oh
+                    size[1] = vh
+
+                texc = (
+                    tcx,
+                    tcy + tch,
+                    tcx + tcw,
+                    tcy + tch,
+                    tcx + tcw,
+                    tcy,
+                    tcx,
+                    tcy)
+
+                # add rectangle.
+                r = rects[line_num]
+                r.pos = int(x), int(y - mlh)
+                r.size = size
+                r.texture = texture
+                r.tex_coords = texc
+                add(r)
+
+            y -= dy
+
+        self._update_graphics_selection()
+
+
+    def update_all(self):
+        _lines_labels = []
+        _line_rects = []
+        _create_label = self._create_line_label
+
+        for x in self._lines:
+            lbl = _create_label(x)
+            _lines_labels.append(lbl)
+            _line_rects.append(Rectangle(size=lbl.size))
+
+
+            self._lines_labels = _lines_labels
+            self._lines_rects = _line_rects
+
 
 
 if __name__ == '__main__':
@@ -276,7 +349,7 @@ insert_text
     refresh_text_from_property
         refresh_text
                 _create_line_label
-            insert_lines
+            insert_lines : << triggers update >>
 
             trigger_update_graphics
                 update_graphics
