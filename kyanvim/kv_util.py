@@ -175,18 +175,18 @@ class BASE:
         self.canvas.update_cell_text(kvcell, data, fg=fg, bg=bg)
 
     def _scroll_cells(self, count, rowsize):
-        top, bot = self._screen.top, self._screen.bot
-        left, right = self._screen.left, self._screen.right
+        # top, bot = self._screen.top, self._screen.bot
+        # left, right = self._screen.left, self._screen.right
 
-        if count > 0:
-            move_top, move_bot = top + count, bot - count + 1
-        else:
-            move_top, move_bot = top, bot + count
+        # if count > 0:
+            # move_top, move_bot = top + count, bot - count + 1
+        # else:
+            # move_top, move_bot = top, bot + count
 
         # The following two commands only operate on the UI cells
         # Scroll the widget cells
-        apply(lambda cell: cell.get_canvas_data().scroll(count*rowsize),
-              self._screen.iter(move_top, left, move_bot, right))
+        # apply(lambda cell: cell.get_canvas_data().scroll(count*rowsize),
+              # self._screen.iter(move_top, left, move_bot, right))
 
         self._screen.scroll(count)
 
